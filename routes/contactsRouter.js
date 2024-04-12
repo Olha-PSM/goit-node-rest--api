@@ -1,23 +1,22 @@
-const express = require("express");
+import express from "express";
+import ContactController from "../controllers/contactsControllers.js";
+import isValidId from "../helpers/isValidid.js";
+const router = express.Router();
+const jsonParser = express.json();
 
-const {
-  getAllContacts,
-  getOneContact,
-  deleteContact,
-  createContact,
-  updateContact,
-} = require("../controllers/contactsControllers.js");
+router.get("/", ContactController.getAllContacts);
 
-const contactsRouter = express.Router();
+router.get("/:id", isValidId, ContactController.getOneContact);
 
-contactsRouter.get("/", getAllContacts);
+router.post("/", jsonParser, ContactController.createContact);
+router.patch(
+  "/:id/favorite",
+  jsonParser,
+  isValidId,
+  ContactController.updateFavorite
+);
 
-contactsRouter.get("/:id", getOneContact);
+router.put("/:id", isValidId, jsonParser, ContactController.updateContact);
 
-contactsRouter.delete("/:id", deleteContact);
-
-contactsRouter.post("/", createContact);
-
-contactsRouter.put("/:id", updateContact);
-
-module.exports = contactsRouter;
+router.delete("/:id", isValidId, ContactController.deleteContact);
+export default router;
