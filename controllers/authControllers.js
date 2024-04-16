@@ -6,10 +6,9 @@ import { userLoginSchema, userRegisterSchema } from "../models/users.js";
 const { JWT_SECRET } = process.env;
 
 async function register(req, res, next) {
-  const { email, password } = req.body;
-  const normalizedEmail = email.toLowerCase();
   try {
-    const user = await User.findOne({ email: normalizedEmail });
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
     const { error } = userRegisterSchema.validate(req.body);
     if (error) throw HttpError(400, error.message);
     if (user !== null) {
@@ -17,23 +16,23 @@ async function register(req, res, next) {
     }
     const passwordHash = await bcrypt.hash(password, 10);
     const newUser = await User.create({
-      email: normalizedEmail,
+      email,
       password: passwordHash,
     });
 
-    res
-      .status(201)
-      .json({ email: newUser.email, subscription: newUser.subscription });
+    res.status(201).json({
+      email: newUser.email,
+      subscription: newUser.subscription,
+    });
   } catch (error) {
     next(error);
   }
 }
 async function login(req, res, next) {
   const { email, password } = req.body;
-  const normalizedEmail = email.toLowerCase();
 
   try {
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ email });
     const { error } = userLoginSchema.validate(req.body);
     if (error) throw HttpError(400, error.message);
     if (!user) {
