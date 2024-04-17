@@ -8,6 +8,6 @@ router.post("/register", jsonParser, AuthController.register);
 
 router.post("/login", jsonParser, AuthController.login);
 router.get("/current", auth, AuthController.getCurrent);
-router.get("/logout", auth, AuthController.logout);
+router.post("/logout", auth, AuthController.logout);
 
 export default router;
