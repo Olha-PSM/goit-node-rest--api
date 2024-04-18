@@ -8,7 +8,7 @@ import {
 
 async function getAllContacts(req, res, next) {
   try {
-    const result = await Contact.find();
+    const result = await Contact.find({ owner: req.user.id });
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -16,8 +16,9 @@ async function getAllContacts(req, res, next) {
 }
 async function getOneContact(req, res, next) {
   const { id } = req.params;
+  const { _id: owner } = req.user;
   try {
-    const result = await Contact.findById(id);
+    const result = await Contact.findById({ _id: id, owner });
 
     if (!result) {
       throw HttpError(404);
@@ -28,10 +29,17 @@ async function getOneContact(req, res, next) {
   }
 }
 async function createContact(req, res, next) {
+  const contact = {
+    name: req.body.name,
+    email: req.body.email,
+    phone: req.body.phone,
+    favorite: req.body.favorite,
+    owner: req.user.id,
+  };
   try {
     const { error } = createContactSchema.validate(req.body);
     if (error) throw HttpError(400, error.message);
-    const result = await Contact.create(req.body);
+    const result = await Contact.create(contact);
 
     res.status(201).json(result);
   } catch (error) {
@@ -58,7 +66,9 @@ async function updateContact(req, res, next) {
     if (!result) {
       throw HttpError(404);
     }
-
+    if (result.owner.toString() !== req.user._id.toString()) {
+      return res.status(404).json("Contact not found");
+    }
     res.json(result);
   } catch (error) {
     next(error);
@@ -72,6 +82,9 @@ async function deleteContact(req, res, next) {
 
     if (!result) {
       throw HttpError(404);
+    }
+    if (result.owner.toString() !== req.user.id) {
+      return res.status(404).send("Contact not found");
     }
     res.json({ id });
   } catch (error) {
@@ -94,7 +107,9 @@ async function updateFavorite(req, res, next) {
     if (!result) {
       throw HttpError(404, "Not found");
     }
-
+    if (result.owner.toString() !== req.user._id.toString()) {
+      return res.status(404).json("Contact not found");
+    }
     res.status(200).json(result);
   } catch (error) {
     next(error);
