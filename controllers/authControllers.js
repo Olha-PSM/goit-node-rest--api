@@ -96,10 +96,10 @@ async function uploadAvatar(req, res, next) {
   const { id } = req.user;
 
   try {
-    const { path: tmpUpload, originalname } = req.file;
     if (!req.file) {
       throw HttpError(400, "File not uploaded");
     }
+    const { path: tmpUpload, originalname } = req.file;
 
     const filename = `${id}-${originalname}`;
 
