@@ -1,5 +1,11 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+
+import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import Jimp from "jimp";
+
 import User from "../models/users.js";
 import HttpError from "../helpers/HttpError.js";
 import { userLoginSchema, userRegisterSchema } from "../models/users.js";
@@ -14,15 +20,20 @@ async function register(req, res, next) {
     if (user !== null) {
       return res.status(409).send({ message: "Email in use" });
     }
+
+    const emailHash = crypto.createHash("md5").update(email).digest("hex");
+
     const passwordHash = await bcrypt.hash(password, 10);
     const newUser = await User.create({
       email,
       password: passwordHash,
+      avatarURL: `https://gravatar.com/avatar/${emailHash}.jpg?d=robohash`,
     });
 
     res.status(201).json({
       email: newUser.email,
       subscription: newUser.subscription,
+      avatarURL: newUser.avatarURL,
     });
   } catch (error) {
     next(error);
@@ -81,4 +92,37 @@ async function logout(req, res, next) {
   }
 }
 
-export default { register, login, getCurrent, logout };
+async function uploadAvatar(req, res, next) {
+  const { id } = req.user;
+
+  try {
+    if (!req.file) {
+      throw HttpError(400, "File not uploaded");
+    }
+    const { path: tmpUpload, originalname } = req.file;
+
+    const filename = `${id}-${originalname}`;
+
+    const changeSizeAvatar = await Jimp.read(tmpUpload);
+    changeSizeAvatar.resize(250, 250).write(tmpUpload);
+
+    await fs.rename(tmpUpload, path.join("public/avatars", filename));
+
+    const avatarURL = path.join("/avatars", filename);
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { avatarURL: avatarURL },
+      { new: true }
+    );
+    if (user === null) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    res.json({ avatarURL: user.avatarURL });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export default { register, login, getCurrent, logout, uploadAvatar };
