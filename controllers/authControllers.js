@@ -1,3 +1,4 @@
+import "dotenv/config";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -5,11 +6,21 @@ import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import Jimp from "jimp";
+import nodemailer from "nodemailer";
 
 import User from "../models/users.js";
 import HttpError from "../helpers/HttpError.js";
 import { userLoginSchema, userRegisterSchema } from "../models/users.js";
-const { JWT_SECRET } = process.env;
+const { JWT_SECRET, BASE_URL } = process.env;
+
+const transport = nodemailer.createTransport({
+  host: "sandbox.smtp.mailtrap.io",
+  port: 2525,
+  auth: {
+    user: process.env.MAILTRAP_USER,
+    pass: process.env.MAILTRAP_PASS,
+  },
+});
 
 async function register(req, res, next) {
   try {
@@ -20,13 +31,22 @@ async function register(req, res, next) {
     if (user !== null) {
       return res.status(409).send({ message: "Email in use" });
     }
-
     const emailHash = crypto.createHash("md5").update(email).digest("hex");
-
     const passwordHash = await bcrypt.hash(password, 10);
+    const verificationToken = crypto.randomUUID();
+
+    await transport.sendMail({
+      to: email,
+      from: "pismennaolha@ukr.net",
+      subject: "Verify email",
+      html: `To confirm you registration please click on the <a href="${BASE_URL}/api/users/verify/${verificationToken}">Click verify email</a>`,
+      text: `To confirm you registration please open the link ${BASE_URL}/api/users/verify/${verificationToken}`,
+    });
+
     const newUser = await User.create({
       email,
       password: passwordHash,
+      verificationToken,
       avatarURL: `https://gravatar.com/avatar/${emailHash}.jpg?d=robohash`,
     });
 
@@ -54,7 +74,9 @@ async function login(req, res, next) {
     if (isMatch === false) {
       return res.status(401).send({ message: "Email or password is wrong" });
     }
-
+    if (user.verify === false) {
+      return res.status(401).send({ message: "Email not verified" });
+    }
     const payload = { id: user._id, name: user.name };
     const token = jwt.sign(payload, JWT_SECRET, {
       expiresIn: "23h",
@@ -125,4 +147,57 @@ async function uploadAvatar(req, res, next) {
   }
 }
 
-export default { register, login, getCurrent, logout, uploadAvatar };
+async function verify(req, res, next) {
+  const { verificationToken } = req.params;
+
+  try {
+    const user = await User.findOne({ verificationToken });
+
+    if (user === null) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await User.findByIdAndUpdate(user._id, {
+      verify: true,
+      verificationToken: null,
+    });
+
+    res.json({ message: "Verification successful" });
+  } catch (error) {
+    next(error);
+  }
+}
+async function resendVerifyEmail(req, res, next) {
+  const { email } = req.body;
+  const verificationToken = crypto.randomUUID();
+  try {
+    const user = await User.findOne({ email });
+    if (user === null) {
+      return res.status(400).json({ message: "missing required field email" });
+    }
+    if (user.verify) {
+      return res
+        .status(400)
+        .json({ message: "Verification has already been passed" });
+    }
+    await transport.sendMail({
+      to: email,
+      from: "pismennaolha@ukr.net",
+      subject: "Verify email",
+      html: `To confirm you registration please click on the <a href="${BASE_URL}/api/users/verify/${user.verificationToken}">Click verify email</a>`,
+      text: `To confirm you registration please open the link ${BASE_URL}/api/users/verify/${verificationToken}`,
+    });
+    res.json({ message: "Verification email sent" });
+  } catch (error) {
+    next(error);
+  }
+}
+export default {
+  register,
+  login,
+  getCurrent,
+  logout,
+  uploadAvatar,
+  verify,
+  resendVerifyEmail,
+};

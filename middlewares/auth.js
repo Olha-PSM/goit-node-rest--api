@@ -16,6 +16,9 @@ const auth = async (req, res, next) => {
     if (!user || !user.token || user.token !== token) {
       next(HttpError(401));
     }
+    if (user.verify === false) {
+      return res.status(401).send({ message: "Your account is not verified" });
+    }
     req.user = user;
     next();
   } catch (error) {
